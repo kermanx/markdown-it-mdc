@@ -1,6 +1,7 @@
 import type MarkdownIt from 'markdown-it'
-import TokenClass from 'markdown-it/lib/token.mjs'
+import type Renderer from 'markdown-it/lib/renderer.mjs'
 
+import TokenClass from 'markdown-it/lib/token.mjs'
 import { searchProps } from '../parse/props'
 
 export interface MdcInlinePropsOptions {
@@ -125,10 +126,7 @@ export const MarkdownItInlineProps: MarkdownIt.PluginWithOptions<MdcInlinePropsO
     md.renderer.renderInlineAsync = wrapRenderInline(md.renderer.renderInlineAsync as any)
 }
 
-type Renderer = MarkdownIt['renderer']
-type RenderInline = Renderer['renderInline']
-
-function wrapRenderInline(renderInline: RenderInline): RenderInline {
+function wrapRenderInline(renderInline: Renderer['renderInline']): Renderer['renderInline'] {
   return function (this: Renderer, tokens, options, env) {
     tokens = [...tokens]
     tokens.forEach((token, index) => {
