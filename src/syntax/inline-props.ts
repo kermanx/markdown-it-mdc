@@ -4,6 +4,7 @@ import type MarkdownIt from 'markdown-it'
 // @ts-expect-error missing type
 import TokenClass from 'markdown-it/lib/token.mjs'
 
+import type Renderer from 'markdown-it/lib/renderer'
 import { searchProps } from '../parse/props'
 
 export interface MdcInlinePropsOptions {
@@ -126,8 +127,14 @@ export const MarkdownItInlineProps: MarkdownIt.PluginWithOptions<MdcInlinePropsO
   }
 
   // Replace the inline renderer to apply the props to the previous token
-  const _renderInline = md.renderer.renderInline
-  md.renderer.renderInline = function (tokens: Token[], options, env) {
+  md.renderer.renderInline = wrapRenderInline(md.renderer.renderInline)
+  // Support https://github.com/serkodev/markdown-exit/blob/fe1351070a5841426223ab4a0a5c7874ba2b1257/packages/markdown-exit/src/renderer.ts#L389
+  if ('renderInlineAsync' in md.renderer)
+    md.renderer.renderInlineAsync = wrapRenderInline(md.renderer.renderInlineAsync as any)
+}
+
+function wrapRenderInline(renderInline: Renderer['renderInline']): Renderer['renderInline'] {
+  return function (this: Renderer, tokens, options, env) {
     tokens = [...tokens]
     tokens.forEach((token, index) => {
       if (token.type === 'mdc_inline_props') {
@@ -178,6 +185,6 @@ export const MarkdownItInlineProps: MarkdownIt.PluginWithOptions<MdcInlinePropsO
         })
       }
     })
-    return _renderInline.call(this, tokens, options, env)
+    return renderInline.call(this, tokens, options, env)
   }
 }
