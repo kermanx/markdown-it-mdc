@@ -1,10 +1,8 @@
-import type { Token } from 'markdown-it'
 import type MarkdownIt from 'markdown-it'
 
 // @ts-expect-error missing type
 import TokenClass from 'markdown-it/lib/token.mjs'
 
-import type Renderer from 'markdown-it/lib/renderer'
 import { searchProps } from '../parse/props'
 
 export interface MdcInlinePropsOptions {
@@ -133,7 +131,10 @@ export const MarkdownItInlineProps: MarkdownIt.PluginWithOptions<MdcInlinePropsO
     md.renderer.renderInlineAsync = wrapRenderInline(md.renderer.renderInlineAsync as any)
 }
 
-function wrapRenderInline(renderInline: Renderer['renderInline']): Renderer['renderInline'] {
+type Renderer = MarkdownIt['renderer']
+type RenderInline = Renderer['renderInline']
+
+function wrapRenderInline(renderInline: RenderInline): RenderInline {
   return function (this: Renderer, tokens, options, env) {
     tokens = [...tokens]
     tokens.forEach((token, index) => {
