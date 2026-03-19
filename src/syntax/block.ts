@@ -1,6 +1,6 @@
 import type MarkdownIt from 'markdown-it'
-import type Token from 'markdown-it/lib/token'
-import YAML from 'js-yaml'
+import type Token from 'markdown-it/lib/token.mjs'
+import { JSON_SCHEMA, load } from 'js-yaml'
 import { parseBlockParams } from '../parse/block-params'
 
 export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
@@ -15,24 +15,57 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
     function mdc_block_shorthand(state, startLine, endLine, silent) {
       const line = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine])
 
-      if (!line.match(/^:[\w]/))
+      if (!line.match(/^:\w/))
         return false
 
+      const parsed = parseBlockParams(line.slice(1))
       const {
         name,
+        content,
         props,
-      } = parseBlockParams(line.slice(1))
+        remaining,
+      } = parsed
+
+      // If there's unparsed remaining content, this should be treated as inline component in a paragraph
+      if (remaining) {
+        return false
+      }
 
       state.lineMax = startLine + 1
 
       if (!silent) {
-        const token = state.push('mdc_block_shorthand', name, 0)
-        props?.forEach(([key, value]) => {
-          if (key === 'class')
-            token.attrJoin(key, value)
-          else
-            token.attrSet(key, value)
-        })
+        if (content !== undefined) {
+          // Component with content - create opening and closing tags
+          const tokenOpen = state.push('mdc_block_shorthand', name, 1)
+          props?.forEach(([key, value]) => {
+            if (key === 'class')
+              tokenOpen.attrJoin(key, value)
+            else
+              tokenOpen.attrSet(key, value)
+          })
+          tokenOpen.map = [startLine, startLine + 1]
+
+          // Create inline container for the content
+          const inline = state.push('inline', '', 0)
+          inline.content = ''
+          const text = new state.Token('text', '', 0)
+          text.content = content
+          inline.children = [text]
+
+          const tokenClose = state.push('mdc_block_shorthand', name, -1)
+          tokenClose.map = [startLine, startLine + 1]
+        }
+        else {
+          // Self-closing component
+          const token = state.push('mdc_block_shorthand', name, 0)
+          token.map = [startLine, startLine + 1]
+          props?.forEach(([key, value]) => {
+            if (key === 'class')
+              token.attrJoin(key, value)
+            else
+              token.attrSet(key, value)
+          })
+        }
       }
 
       state.line = startLine + 1
@@ -51,6 +84,15 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
       let start = state.bMarks[startLine] + state.tShift[startLine]
       let max = state.eMarks[startLine]
       const indent = state.sCount[startLine]
+
+      // Variables to track code fences (``` or ~~~) so we don't match closing :: inside them
+      let inCodeFence = false
+      let codeFenceCharCode = 0
+      let codeFenceCount = 0
+
+      // Variables to track nesting depth for blocks with the same marker count
+      // This is used to determine if the current line is a closing marker for a nested block
+      let nestingDepth = 0
 
       // Check out the first character quickly,
       // this should filter out most of non-containers
@@ -99,7 +141,39 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
           break
         }
 
-        if (marker_char !== state.src.charCodeAt(start))
+        const lineCharCode = state.src.charCodeAt(start)
+
+        // #region Code fence tracking to prevent matching closing :: inside code fences
+        // 1. Detect closing code fence (``` or ~~~)
+        if (inCodeFence) {
+          if (lineCharCode === codeFenceCharCode) {
+            let fencePos = start + 1
+            while (fencePos < max && state.src.charCodeAt(fencePos) === codeFenceCharCode)
+              fencePos++
+            if (fencePos - start >= codeFenceCount) {
+              const afterFence = state.skipSpaces(fencePos)
+              if (afterFence >= max)
+                inCodeFence = false
+            }
+          }
+          continue
+        }
+
+        // 2. Detect opening code fence (``` or ~~~)
+        if (lineCharCode === 0x60 /* ` */ || lineCharCode === 0x7E /* ~ */) {
+          let fencePos = start + 1
+          while (fencePos < max && state.src.charCodeAt(fencePos) === lineCharCode)
+            fencePos++
+          if (fencePos - start >= 3) {
+            inCodeFence = true
+            codeFenceCharCode = lineCharCode
+            codeFenceCount = fencePos - start
+            continue
+          }
+        }
+        // #endregion
+
+        if (marker_char !== lineCharCode)
           continue
 
         // if (state.sCount[nextLine] - state.blkIndent >= 4) {
@@ -120,8 +194,17 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
         // pos -= (pos - start)
         pos = state.skipSpaces(pos)
 
-        if (pos < max)
+        if (pos < max) {
+          // Keep track of newly opened nested blocks
+          nestingDepth++
           continue
+        }
+
+        if (nestingDepth > 0) {
+          // Decrement the nesting depth for closing markers
+          nestingDepth--
+          continue
+        }
 
         // found!
         auto_closed = true
@@ -163,6 +246,7 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
 
       // Ending Tag
       const tokenClose = state.push('mdc_block_close', params.name, -1)
+      tokenClose.map = [startLine, nextLine]
       tokenClose.markup = state.src.slice(start, pos)
       tokenClose.block = true
 
@@ -219,9 +303,9 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
       if (!silent) {
         const yaml = state.src.slice(state.bMarks[startLine + 1], state.eMarks[lineEnd - 1])
 
-        const data = YAML.load(yaml) as Record<string, unknown>
+        const data = load(yaml, { schema: JSON_SCHEMA }) as Record<string, unknown>
         const token = state.env.mdcBlockTokens[0]
-        Object.entries(data).forEach(([key, value]) => {
+        Object.entries(data || {}).forEach(([key, value]) => {
           if (key === 'class')
             token.attrJoin(key, value)
           else
@@ -245,7 +329,7 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
 
       const start = state.bMarks[startLine] + state.tShift[startLine]
 
-      if (!(state.src[start] === '#' && state.src[start + 1] !== ' '))
+      if (!(state.src[start] === '#' && state.src[start + 1] !== ' ' && state.src[start + 1] !== '#'))
         return false
 
       const line = state.src.slice(start, state.eMarks[startLine])

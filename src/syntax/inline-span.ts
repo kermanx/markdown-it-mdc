@@ -5,7 +5,7 @@ export interface MdcInlineSpanOptions {
 }
 
 export const MarkdownItInlineSpan: MarkdownIt.PluginWithOptions<MdcInlineSpanOptions> = (md) => {
-  md.inline.ruler.after('mdc_inline_props', 'mdc_inline_span', (state, silent) => {
+  md.inline.ruler.before('link', 'mdc_inline_span', (state, silent) => {
     const start = state.pos
     const char = state.src[start]
 
@@ -13,35 +13,48 @@ export const MarkdownItInlineSpan: MarkdownIt.PluginWithOptions<MdcInlineSpanOpt
       return false
 
     let index = start + 1
+    let depth = 0
     while (index < state.src.length) {
-      if (state.src[index] === '\\')
+      if (state.src[index] === '\\') {
         index += 2
-      if (state.src[index] === ']')
-        break
+        continue
+      }
+      if (state.src[index] === '[') {
+        depth++
+      }
+      else if (state.src[index] === ']') {
+        if (depth === 0)
+          break
+        depth--
+      }
       index += 1
     }
 
     if (index === start)
       return false
 
+    // Don't match [text](url) or [text][ref] - let the link parser handle those
+    const nextChar = state.src[index + 1]
+    if (nextChar === '(' || nextChar === '[')
+      return false
+
     if (silent)
       return true
 
-    state.posMax = start + 1
     state.push('mdc_inline_span', 'span', 1)
 
+    // Parse the content between brackets as inline markdown
+    const oldPos = state.pos
+    const oldPosMax = state.posMax
     state.pos = start + 1
     state.posMax = index
-    const text = state.push('text', '', 0)
-    text.content = state.src.slice(start + 1, index)
-
-    state.pos = index
-    state.posMax = index + 1
+    state.md.inline.tokenize(state)
+    state.pos = oldPos
+    state.posMax = oldPosMax
 
     state.push('mdc_inline_span', 'span', -1)
 
     state.pos = index + 1
-    state.posMax = index + 1
 
     return true
   })

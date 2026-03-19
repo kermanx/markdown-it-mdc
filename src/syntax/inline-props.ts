@@ -1,6 +1,4 @@
 import type MarkdownIt from 'markdown-it'
-
-// @ts-expect-error missing type
 import TokenClass from 'markdown-it/lib/token.mjs'
 
 import { searchProps } from '../parse/props'
@@ -33,19 +31,15 @@ export const MarkdownItInlineProps: MarkdownIt.PluginWithOptions<MdcInlinePropsO
     if (end === start)
       return false
 
+    state.pos = end
+
     if (silent)
       return true
-
-    state.pos = start
-    state.posMax = end
 
     // We insert a hidden token holding the props, and later apply them to the previous token
     const token = state.push('mdc_inline_props', 'span', 0)
     token.attrs = props
     token.hidden = true
-
-    state.pos = end
-    state.posMax = end
 
     return true
   })
