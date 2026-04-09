@@ -47,10 +47,8 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
 
           // Create inline container for the content
           const inline = state.push('inline', '', 0)
-          inline.content = ''
-          const text = new state.Token('text', '', 0)
-          text.content = content
-          inline.children = [text]
+          inline.content = content
+          inline.children = []
 
           const tokenClose = state.push('mdc_block_shorthand', name, -1)
           tokenClose.map = [startLine, startLine + 1]
@@ -233,6 +231,16 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
           else
             tokenOpen.attrSet(key, value)
         })
+      }
+
+      // Add bracket content as first paragraph `::bloc[Content]\n::`
+      if (params.content !== undefined) {
+        const pOpen = state.push('paragraph_open', 'p', 1)
+        pOpen.map = [startLine, startLine + 1]
+        const inline = state.push('inline', '', 0)
+        inline.content = params.content
+        inline.children = []
+        state.push('paragraph_close', 'p', -1)
       }
 
       // Parse content
