@@ -45,7 +45,8 @@
     "release": "bumpp",
     "start": "tsx src/index.ts",
     "test": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm run lint && pnpm run test --run && pnpm run typecheck"
   },
   "peerDependencies": {
     "@types/markdown-it": "*",
