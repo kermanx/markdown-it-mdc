@@ -22,7 +22,7 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
     function mdc_block_shorthand(state, startLine, endLine, silent) {
       const line = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine])
 
-      if (!line.match(/^:\w/))
+      if (!/^:\w/.test(line))
         return false
 
       const parsed = parseBlockParams(line.slice(1))
@@ -361,7 +361,7 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
 
       while (lineEnd < endLine) {
         const line = state.src.slice(state.bMarks[lineEnd] + state.tShift[startLine], state.eMarks[lineEnd])
-        if (line.match(/^#(\w)+/) || line.startsWith('::'))
+        if (/^#\w+/.test(line) || line.startsWith('::'))
           break
         lineEnd += 1
       }

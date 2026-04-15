@@ -133,7 +133,7 @@ export function searchProps(content: string, index = 0) {
 
   // Escale quotes
   props.forEach((v) => {
-    if (v[1].match(/^(['"`]).*\1$/))
+    if (/^(['"`]).*\1$/.test(v[1]))
       v[1] = v[1].slice(1, -1)
   })
 
