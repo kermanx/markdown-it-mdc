@@ -7,6 +7,13 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
   const min_markers = 2
   const marker_str = ':'
   const marker_char = marker_str.charCodeAt(0)
+  const blockYamlLines: Record<string, string> = {
+    '---': '---',
+    '```yaml [props]': '```',
+    '~~~yaml [props]': '~~~',
+    '```yml [props]': '```',
+    '~~~yml [props]': '~~~',
+  }
 
   md.block.ruler.before(
     'fence',
@@ -290,7 +297,10 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
       const start = state.bMarks[startLine] + state.tShift[startLine]
       const end = state.eMarks[startLine]
 
-      if (state.src.slice(start, end) !== '---')
+      const line = state.src.slice(start, end)
+      const blockAttributesClosingFence = blockYamlLines[line] || ''
+
+      if (!blockAttributesClosingFence)
         return false
 
       let lineEnd = startLine + 1
@@ -298,7 +308,7 @@ export const MarkdownItMdcBlock: MarkdownIt.PluginSimple = (md) => {
       let found = false
       while (lineEnd < endLine) {
         const line = state.src.slice(state.bMarks[lineEnd] + state.tShift[startLine], state.eMarks[lineEnd])
-        if (line === '---') {
+        if (line === blockAttributesClosingFence) {
           found = true
           break
         }
